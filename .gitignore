@@ -1,0 +1,13 @@
+node_modules/
+dist/
+build/
+*.log
+.env*
+!.env.example
+.venv/
+*venv/
+.playwright/
+coverage/
+content/drafts/
+content/reviewed/
+*.tmp
