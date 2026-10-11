@@ -11,3 +11,4 @@ coverage/
 content/drafts/
 content/reviewed/
 *.tmp
+*.tsbuildinfo
