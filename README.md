@@ -25,7 +25,7 @@ npm run generate
 unset OMNIROUTE_API_KEY
 ```
 
-Có thể đổi model với `OMNIROUTE_MODEL` (mặc định `cx/gpt-6-sol`) hoặc endpoint với `OMNIROUTE_BASE_URL` (mặc định `http://localhost:20128/v1`). Lệnh tạo lưu `content/drafts/catalog.json` trên máy, kể cả khi không vượt kiểm tra cấu trúc để bạn có thể sửa; file này được Git bỏ qua.
+Nếu bạn đã lưu key trong `.env.local` ở thư mục dự án (file này được Git bỏ qua), `npm run generate` cũng tự đọc file đó; không cần `export` lại. Chỉ đặt `OMNIROUTE_API_KEY` trong file này, tuyệt đối không dùng tiền tố `VITE_`, không commit hoặc chia sẻ file. Có thể đổi model với `OMNIROUTE_MODEL` (mặc định `cx/gpt-6-sol`) hoặc endpoint với `OMNIROUTE_BASE_URL` (mặc định `http://localhost:20128/v1`). Lệnh tạo lưu `content/drafts/catalog.json` trên máy, kể cả khi không vượt kiểm tra cấu trúc để bạn có thể sửa; file này được Git bỏ qua.
 
 1. Đọc toàn bộ bài học, 20 câu, đáp án, lời giải của cả A–D và kiểm tra tính đúng với nguồn. Validator chỉ bắt lỗi **cấu trúc**, không chứng minh đúng chuyên môn; URL nguồn chỉ là liên kết tham khảo, không phải trích dẫn xác thực từng mệnh đề.
 2. Sau khi duyệt và sửa nếu cần, sao chép bản hoàn chỉnh vào `content/reviewed/catalog.json` (cũng được Git bỏ qua).
