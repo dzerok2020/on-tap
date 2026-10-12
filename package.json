@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "test": "node --test tests/*.test.mjs",
     "generate": "node --env-file-if-exists=.env.local scripts/content.mjs generate",
+    "admin": "node --env-file-if-exists=.env.local scripts/admin.mjs",
     "validate": "node scripts/content.mjs validate",
     "publish": "node scripts/content.mjs publish"
   },

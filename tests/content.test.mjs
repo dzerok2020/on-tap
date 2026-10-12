@@ -19,6 +19,12 @@ test('module imbalance rejects distribution change', () => { const data = fixtur
 test('incorrect choices and missing explanations reject', () => { const data = fixture(); delete data.exams[0].questions[0].explanations.D; assert.match(validate(data).join(' '),/Phương án\/lời giải/); });
 test('duplicate IDs reject', () => { const data = fixture(); data.exams[0].questions[1].id=data.exams[0].questions[0].id; assert.match(validate(data).join(' '),/ID trùng/); });
 test('invalid reference rejects', () => { const data = fixture(); data.lessons[0].sources=['https://example.com']; assert.match(validate(data).join(' '),/nguồn tham khảo/); });
+test('malformed nested section returns validation errors instead of crashing', () => {
+  const catalog = fixture();
+  catalog.lessons[0].sections[0] = null;
+  assert.ok(validate(catalog).some(message => message.includes('Mục bài học không hợp lệ')));
+});
+
 test('empty catalog cannot be published', () => assert.match(validate({lessons:[],exams:[]}).join(' '), /Thiếu bài học|Thiếu đề/));
 test('mixed valid and invalid source links reject', () => { const data=fixture(); data.lessons[0].sources.push('https://example.com'); assert.match(validate(data).join(' '),/nguồn tham khảo/); });
 test('all lessons must include valid module', () => { const data=fixture(); data.lessons[0].module='bad'; assert.match(validate(data).join(' '), /module/); });

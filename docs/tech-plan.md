@@ -3,15 +3,16 @@
 ## Stack chốt
 
 - Web: Vite + React + TypeScript — app tĩnh nhanh, hiển thị tốt trên điện thoại, không có backend giữ secret.
-- Local CLI: Node.js 22+ dùng fetch chuẩn và dữ liệu JSON; gọi endpoint OpenAI-compatible OmniRoute qua biến `OMNIROUTE_API_KEY`, model mặc định `cx/gpt-6-sol`.
+- Local CLI và web quản trị: Node.js 22+ dùng fetch chuẩn, HTTP server chỉ bind `127.0.0.1` và dữ liệu JSON; gọi OmniRoute bằng `OMNIROUTE_API_KEY` chỉ ở process local, model mặc định `cx/gpt-6-sol`.
 - Animation: GSAP + ScrollTrigger chỉ cho motion hỗ trợ định hướng, có `prefers-reduced-motion`.
 - Host: GitHub Pages qua GitHub Actions, miễn phí cho repository public, deploy bundle sau mỗi push lên `main`. Không đưa khóa hay nháp lên host.
 
 ## Kiến trúc module
 
-`CLI generate → content/drafts (private local) → validate → human review → CLI publish → public/content/catalog.json → Vite build → GitHub Pages`.
+`Web local → OmniRoute theo từng module → content/drafts (private local) → validate + human review + phiên bản nháp → xác nhận publish → public/content/catalog.json → commit/push chỉ file này → GitHub Actions → GitHub Pages`. CLI cũ vẫn là đường thủ công, cùng schema/validator; không có đường tự động bỏ qua duyệt.
 
-- `scripts/content.mjs`: generate, validate, publish, schema kiểm định; source URLs đi cùng nội dung.
+- `scripts/content.mjs`: generate CLI, validate, publish CLI, schema kiểm định và source URLs.
+- `scripts/admin.mjs`: server local một người dùng, tài nguyên quản trị riêng khỏi `public/` và Vite build; phát tiến độ qua polling, ghi nháp nguyên tử, chặn request khác origin/Host, chỉ gọi model ở server. Git chỉ commit file catalog sau khi xác nhận hash phiên bản, kiểm tra worktree và theo dõi deploy.
 - `src/`: trang học, thi thử và kết quả; browser chỉ đọc nội dung đã publish, không gọi model.
 - `public/content/`: bản đã duyệt; đánh dấu rõ mô phỏng, không che giấu bảo mật chống gian lận.
 - `tests/`: validator và luồng publish; smoke test tương tác frontend nếu môi trường browser có sẵn.
@@ -25,6 +26,8 @@ content/drafts/             # ignored
 content/reviewed/           # ignored
 public/content/catalog.json # only approved content
 scripts/content.mjs
+scripts/admin.mjs
+admin/                    # chỉ phục vụ từ Node local, không nằm trong Vite build
 src/
 tests/
 docs/product-plan.md

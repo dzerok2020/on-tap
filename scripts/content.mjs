@@ -26,7 +26,7 @@ export function validate(catalog) {
   for (const lesson of catalog.lessons) {
     if (!lesson || !MODULES.includes(lesson.module) || !present(lesson.title) || !present(lesson.summary) || !Array.isArray(lesson.sections) || lesson.sections.length < 2) errors.push('Bài học thiếu module/title/summary hoặc ít hơn 2 mục');
     else {
-      if (!lesson.sections.every(s => present(s.heading) && present(s.body))) errors.push(`Mục bài học không hợp lệ: ${lesson.id}`);
+      if (!lesson.sections.every(s => s && present(s.heading) && present(s.body))) errors.push(`Mục bài học không hợp lệ: ${lesson.id}`);
       if (!Array.isArray(lesson.sources) || !lesson.sources.length || !lesson.sources.every(link => SOURCE_LINKS[lesson.module].includes(link))) errors.push(`Thiếu nguồn tham khảo: ${lesson.id}`);
     }
     if (!lesson?.id || ids.has(lesson.id)) errors.push(`ID trùng/thiếu: ${lesson?.id}`);

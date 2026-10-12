@@ -35,6 +35,16 @@ Nếu bạn đã lưu key trong `.env.local` ở thư mục dự án (file này 
 
 Lệnh `generate` hiện gọi một lần và không tự sửa nội dung AI sai định dạng; nếu model trả về JSON thiếu/truncated, cần chạy lại hoặc sửa nháp sau khi kiểm tra. Không đưa khóa vào GitHub Actions: CI chỉ build nội dung đã duyệt.
 
+## Studio quản trị trên máy local
+
+Chạy `npm run admin` rồi mở `http://127.0.0.1:4174/` trên **chính máy tính đang chạy lệnh**. Cần OmniRoute đang hoạt động và `OMNIROUTE_API_KEY` trong `.env.local` hoặc environment; không nhập key vào trang web. Studio chỉ nghe ở `127.0.0.1`, không được đưa lên GitHub Pages, và không thể truy cập từ điện thoại ở ngoài mạng. Trang học công khai vẫn xem được trên điện thoại dù máy tính tắt.
+
+1. Bấm **Tạo bộ nội dung mới**; theo dõi bốn module hoàn tất lần lượt. Thời gian phụ thuộc model, không có phần trăm ước lượng. Nháp tạo xong được lưu local ở `content/drafts/catalog.json` (Git bỏ qua).
+2. Mở từng bài học/câu hỏi để đọc đáp án và lời giải. Có thể sửa JSON trong trang, bấm **Lưu & kiểm tra**. Các lỗi cấu trúc chặn đăng, nhưng kiểm tra tự động **không chứng minh tính đúng đắn chuyên môn**.
+3. Chỉ sau khi đã đọc và kiểm tra nguồn, tick xác nhận và bấm **Đăng bản đã duyệt**; hộp thoại hỏi lại trước khi commit/push đúng phiên bản nháp đã duyệt. Studio yêu cầu Git `main` sạch (ngoại trừ catalog công khai), đồng bộ `origin/main`, chạy test/build, chỉ commit catalog, theo dõi GitHub Actions và đối chiếu dữ liệu trên Pages. Nếu báo lỗi, đọc trạng thái, xử lý rồi xác nhận lại; không tự ý đăng một bản khác.
+
+> **Quan trọng:** Có file `public/content/catalog.json` chưa được bạn duyệt trong thư mục làm việc không có nghĩa là đã đăng. Đừng dùng `git add .` hoặc push file này nếu chưa kiểm tra. Quy trình CLI ở trên vẫn dùng được khi muốn duyệt và publish thủ công.
+
 ## Triển khai miễn phí
 
 Workflow [deploy.yml](.github/workflows/deploy.yml) chạy test, build và đưa `dist` lên GitHub Pages sau mỗi push lên `main`. Tạo repository **public** có tên `on-tap`; bật Pages → Build and deployment → **GitHub Actions** trong Settings. Trước khi nội dung được duyệt, có thể deploy giao diện rỗng để kiểm tra; nội dung sẽ chỉ xuất hiện sau khi file `public/content/catalog.json` đã được duyệt, commit và push. URL dự kiến: `https://dzerok2020.github.io/on-tap/`. Site truy cập được từ điện thoại ở bất cứ đâu ngay cả khi máy tính tắt; tạo nội dung mới vẫn cần máy local và thao tác duyệt/push.
