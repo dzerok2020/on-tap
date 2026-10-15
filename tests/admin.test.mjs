@@ -5,11 +5,10 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { createServer, request as httpRequest } from 'node:http';
-import { MODULES, SOURCE_LINKS } from '../scripts/content.mjs';
+import { MODULES } from '../scripts/content.mjs';
 
-function content(module) {
-  return {lesson:{id:`lesson-${module}`,module,title:'Bài học áp dụng thực tế',summary:'Một bài học về lựa chọn kỹ thuật.',sections:[{heading:'Tình huống triển khai',body:'Nêu bối cảnh và mục tiêu trước khi chọn phương án.'},{heading:'Đánh đổi và kiểm chứng',body:'So sánh giả định với chỉ số thực nghiệm đáng tin cậy.'}],sources:[SOURCE_LINKS[module][0]]},questions:Array.from({length:5},(_,i)=>({id:`${module}-${i}`,module,level:'L3',scenario:i!==4,context:'Một đội đang triển khai dự án có dữ liệu lệch phân phối.',prompt:'Lựa chọn nào tốt nhất để kiểm chứng nguyên nhân?',options:Object.fromEntries('ABCD'.split('').map(key=>[key,`Phương án ${key}: kiểm tra bằng thử nghiệm có đối chứng.`])),correct:'A',explanations:Object.fromEntries('ABCD'.split('').map(key=>[key,`Giải thích lựa chọn ${key} trong điều kiện thực tế.`])),sources:[SOURCE_LINKS[module][0]]}))};
-}
+import { runInNewContext } from 'node:vm';
+import { content } from './fixtures.mjs';
 
 async function setup() {
   const temp=await mkdtemp(join(tmpdir(),'on-tap-admin-'));
@@ -17,6 +16,8 @@ async function setup() {
   await mkdir(join(temp,'admin'),{recursive:true});
   await copyFile(resolve('scripts/admin.mjs'),join(temp,'scripts/admin.mjs'));
   await copyFile(resolve('scripts/content.mjs'),join(temp,'scripts/content.mjs'));
+  await copyFile(resolve('scripts/publish.mjs'),join(temp,'scripts/publish.mjs'));
+  await copyFile(resolve('scripts/deployment.mjs'),join(temp,'scripts/deployment.mjs'));
   for(const filename of ['index.html','style.css','app.js','gsap.min.js']) await copyFile(resolve('admin',filename),join(temp,'admin',filename));
   await writeFile(join(temp,'package.json'),' {"type":"module"}');
   return temp;
@@ -60,7 +61,7 @@ test('admin: four real steps, private draft, hash editing gate, localhost protec
     assert.equal(state.job.phase,'review',state.job.message);
     assert.deepEqual(state.job.steps.map(s=>s.state),['done','done','done','done']);
     assert.equal(requests,4);
-    assert.equal(state.draft.catalog.exams[0].questions.length,20);
+    assert.equal(state.draft.catalog.exams[0].questions.length,60);
     await assert.rejects(access(join(temp,'public/content/catalog.json')));
     assert.equal((await post('/api/draft',{version:'stale',catalog:state.draft.catalog})).status,409);
     state.draft.catalog.lessons[0].title='Bài học đã được biên tập và duyệt';
@@ -85,4 +86,15 @@ test('admin: four real steps, private draft, hash editing gate, localhost protec
     assert.equal(state.job.phase,'publish-failed'); // no git remote exists in isolated fixture
     await assert.rejects(access(join(temp,'public/content/catalog.json')));
   }finally{child.kill();api.close();await rm(temp,{recursive:true,force:true});}
+});
+
+test('Studio preview renders typed open answers, rubric, points and escapes content', async () => {
+  const source=await readFile(resolve('admin/app.js'),'utf8');
+  const preview=runInNewContext(`${source.slice(source.indexOf('function escape('),source.indexOf('function update('))}; preview`,{labels:{engineering:'Python'}});
+  const open=content('engineering').questions.find(q=>q.type==='code');
+  open.modelAnswer='<script>alert(1)</script> Python solution with adequate explanation';
+  const html=preview({lessons:[],exams:[{questions:[open]}]});
+  assert.match(html,/Code tay/); assert.match(html,/2.5 điểm/); assert.match(html,/Đáp án mẫu/);
+  assert.match(html,/Rubric/); assert.match(html,/Nêu giả định dữ liệu/);
+  assert.match(html,/&lt;script&gt;/); assert.doesNotMatch(html,/<script>|<b>A/);
 });

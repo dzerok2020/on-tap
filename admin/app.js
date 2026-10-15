@@ -1,7 +1,7 @@
 const root = document.querySelector('#app');
 const token = root.dataset.token;
 const el = id => document.getElementById(id);
-const labels = { math:'Toán & định lượng',engineering:'Lập trình & dữ liệu',ai:'AI & sản phẩm',ethics:'Logic & đạo đức' };
+const labels = { math:'Toán & định lượng',engineering:'Python / NumPy / pandas',ai:'AI & sản phẩm',ethics:'Logic & đạo đức' };
 let version = null;
 let dirty = false;
 let lastPhase = '';
@@ -11,7 +11,7 @@ function preview(catalog) {
   if (!catalog) return '';
   const lessons = catalog.lessons || [];
   const questions = catalog.exams?.[0]?.questions || [];
-  return `<details><summary>${lessons.length} bài học · mở xem nội dung</summary>${lessons.map(lesson => `<h3>${escape(lesson.title)}</h3><p>${escape(lesson.summary)}</p>${(lesson.sections || []).map(section => `<h4>${escape(section.heading)}</h4><p>${escape(section.body)}</p>`).join('')}<p>Nguồn: ${(lesson.sources || []).map(escape).join(', ')}</p>`).join('')}</details><details><summary>${questions.length} câu hỏi · mở xem đáp án & lời giải</summary><ol>${questions.map(q => `<li><strong>${escape(labels[q.module] || q.module)} · ${escape(q.level)}</strong><p>${escape(q.context)}</p><p>${escape(q.prompt)}</p><ul>${['A','B','C','D'].map(k => `<li><b>${k}${q.correct === k ? ' ✓' : ''}:</b> ${escape(q.options?.[k])}<br>${escape(q.explanations?.[k])}</li>`).join('')}</ul><p>Nguồn: ${(q.sources || []).map(escape).join(', ')}</p></li>`).join('')}</ol></details>`;
+  return `<details><summary>${lessons.length} bài học · mở xem nội dung</summary>${lessons.map(lesson => `<h3>${escape(lesson.title)}</h3><p>${escape(lesson.summary)}</p>${(lesson.sections || []).map(section => `<h4>${escape(section.heading)}</h4><p>${escape(section.body)}</p>`).join('')}<p>Nguồn: ${(lesson.sources || []).map(escape).join(', ')}</p>`).join('')}</details><details><summary>${questions.length} câu hỏi · mở xem đáp án & lời giải</summary><ol>${questions.map(q => `<li><strong>${escape(labels[q.module] || q.module)} · ${escape(q.level)} · ${escape(({mcq:'Trắc nghiệm',code:'Code tay',essay:'Tự luận'})[q.type] || q.type)} · ${escape(q.points)} điểm</strong><p>${escape(q.context)}</p><p>${escape(q.prompt)}</p>${q.type === 'mcq' ? `<ul>${['A','B','C','D'].map(k => `<li><b>${k}${q.correct === k ? ' ✓' : ''}:</b> ${escape(q.options?.[k])}<br>${escape(q.explanations?.[k])}</li>`).join('')}</ul>` : `<h4>Đáp án mẫu</h4><pre>${escape(q.modelAnswer)}</pre><h4>Rubric · tiêu chí chấm</h4><ul>${(Array.isArray(q.rubric) ? q.rubric : []).map(item => `<li>${escape(item)}</li>`).join('')}</ul>`}<p>Nguồn: ${(q.sources || []).map(escape).join(', ')}</p></li>`).join('')}</ol></details>`;
 }
 function update(state) {
   const {job,draft} = state;
@@ -35,7 +35,7 @@ function update(state) {
   el('validation').className = hasDraft && draft.errors.length ? 'status-error' : 'status-success';
   el('publish').disabled = active || !hasDraft || !!draft.errors.length || dirty || !el('approve').checked;
   el('steps').innerHTML = [
-    step('Tạo nội dung','4 module, mỗi module 5 câu',active && job.phase === 'generating' ? 'active' : job.steps?.every(s=>s.state === 'done') ? 'complete' : job.phase === 'failed' ? 'failed' : '',1),
+    step('Tạo nội dung','60 câu · 90 phút · 100 điểm',active && job.phase === 'generating' ? 'active' : job.steps?.every(s=>s.state === 'done') ? 'complete' : job.phase === 'failed' ? 'failed' : '',1),
     step('Xem & sửa nháp','Đọc bài học và đáp án',hasDraft ? 'complete' : '',2),
     step('Duyệt bản cụ thể','Xác nhận trước khi gửi',job.phase === 'publishing' ? 'active' : '',3),
     step('Kiểm tra web thật','Chờ GitHub Actions và URL',job.phase === 'deployed' ? 'complete' : job.phase === 'deploying' ? 'active' : job.phase === 'publish-failed' ? 'failed' : '',4)

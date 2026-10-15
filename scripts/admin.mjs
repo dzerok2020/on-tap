@@ -1,21 +1,22 @@
 import { createServer } from 'node:http';
-import { readFile, writeFile, mkdir, rename, stat } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, rename } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { randomBytes, createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
-import { MODULES, SOURCE_LINKS, validate } from './content.mjs';
+import { confirmDeployment } from './deployment.mjs';
+import { publishCatalog } from './publish.mjs';
+import { MODULES, MODULE_META, validate, summarize, expectedCounts, modulePrompt, EXAM_STRUCTURE } from './content.mjs';
 
 const exec = promisify(execFile);
 const ROOT = resolve(import.meta.dirname, '..');
 const DRAFT = resolve(ROOT, 'content/drafts/catalog.json');
-const PUBLIC = resolve(ROOT, 'public/content/catalog.json');
 const PAGE = resolve(ROOT, 'admin/index.html');
 const CSS = resolve(ROOT, 'admin/style.css');
 const JS = resolve(ROOT, 'admin/app.js');
 const GSAP = resolve(ROOT, 'admin/gsap.min.js');
-const moduleNames = { math: 'Toán & định lượng', engineering: 'Lập trình & dữ liệu', ai: 'AI & sản phẩm', ethics: 'Logic & đạo đức' };
+const moduleNames = Object.fromEntries(MODULES.map(module => [module, MODULE_META[module].label]));
 const token = randomBytes(32).toString('hex');
 const hash = text => createHash('sha256').update(text).digest('hex');
 const normalized = data => JSON.stringify(data, null, 2) + '\n';
@@ -45,7 +46,7 @@ async function currentDraft() {
   try {
     const text = await readFile(DRAFT, 'utf8');
     const catalog = JSON.parse(text);
-    return { catalog, version: hash(text), errors: validate(catalog) };
+    return { catalog, version: hash(text), errors: validate(catalog), summary: summarize(catalog) };
   } catch (error) {
     if (error.code === 'ENOENT') return null;
     throw error;
@@ -80,16 +81,17 @@ async function generate() {
       job.message = `Đang tạo ${step.label}…`;
       const result = await model([
         { role: 'system', content: 'Chỉ trả một JSON object hợp lệ, không markdown. Viết tiếng Việt. Không nhận là đề VinUni chính thức.' },
-        { role: 'user', content: `Viết bài học và đúng 5 câu hỏi mới cho module ${module} (${moduleNames[module]}) mức SFIA L3/L4. Tham khảo URL: ${JSON.stringify(SOURCE_LINKS[module])}. Trả JSON {"lesson":{"id":"lesson-${module}-1","module":"${module}","title":"...","summary":"...","sections":[{"heading":"...","body":"..."},{"heading":"...","body":"..."}],"sources":["URL"]},"questions":[{"id":"${module}-1","module":"${module}","level":"L3","scenario":true,"context":"Tình huống công việc cụ thể...","prompt":"Chọn quyết định tốt nhất và giải thích...","options":{"A":"...","B":"...","C":"...","D":"..."},"correct":"A","explanations":{"A":"Vì sao tốt nhất","B":"Vì sao kém","C":"Vì sao kém","D":"Vì sao kém"},"sources":["URL"]}]}. 5 câu khác nhau, ít nhất 4 tình huống, tất cả options và explanations có nội dung đầy đủ, lý giải trade-off và nguyên nhân. Không sao chép nguyên văn và không bịa vị trí trích dẫn. Chỉ dùng các URL đã cấp.` }
+        { role: 'user', content: modulePrompt(module) }
       ]);
-      if (!result.lesson || !Array.isArray(result.questions) || result.questions.length !== 5) throw new Error(`Module ${step.label} không đủ một bài học và 5 câu; thử lại.`);
+      const expected = expectedCounts(module);
+      if (!result.lesson || !Array.isArray(result.questions) || result.questions.length !== expected.total) throw new Error(`Module ${step.label} cần một bài học và ${expected.total} câu; thử lại.`);
       lessons.push(result.lesson);
       questions.push(...result.questions);
       step.state = 'done';
     }
     job.phase = 'validating';
     job.message = 'Đã tạo 4 module. Đang ghép và kiểm tra cấu trúc…';
-    const catalog = { lessons, exams: [{ id: `exam-${Date.now()}`, title: 'Đề thi mô phỏng năng lực AI thực chiến', durationMinutes: 90, questions }] };
+    const catalog = { version: 2, lessons, exams: [{ id: `exam-${Date.now()}`, title: 'Bài kiểm tra ôn tập AI thực chiến', description: '60 câu theo 4 module: toán định lượng, Python/NumPy/Pandas, AI/product AI, logic & responsible AI.', durationMinutes: EXAM_STRUCTURE.durationMinutes, totalPoints: EXAM_STRUCTURE.totalPoints, disclaimer: 'Đây chỉ là đề cương ôn tập cộng đồng, không phải đề thi chính thức của VinUni, không cố gắng mô phỏng đề thi thật và không cam kết giống đề thật.', questions }] };
     const text = normalized(catalog);
     await atomicWrite(DRAFT, text);
     const errors = validate(catalog);
@@ -100,49 +102,21 @@ async function generate() {
     job = { phase: 'failed', steps, message: safeError(error), deployment: null };
   } finally { busy = false; }
 }
-async function preflight() {
-  const branch = await command('git', ['branch', '--show-current']);
-  if (branch !== 'main') throw new Error('Chỉ đăng từ nhánh main.');
-  const remote = await command('git', ['remote', 'get-url', 'origin']);
-  if (!/^https:\/\/github\.com\/dzerok2020\/on-tap(?:\.git)?$/.test(remote) && !/^git@github\.com:dzerok2020\/on-tap(?:\.git)?$/.test(remote)) throw new Error('Remote origin không phải repository dự kiến.');
-  const status = await command('git', ['status', '--porcelain=v1', '-uall']);
-  const lines = status.split('\n').filter(Boolean);
-  if (lines.some(line => line.slice(3) !== 'public/content/catalog.json')) throw new Error('Git có thay đổi khác catalog. Hãy commit hoặc xử lý trước khi đăng.');
-  await command('git', ['fetch', 'origin', 'main']);
-  const local = await command('git', ['rev-parse', 'HEAD']);
-  const upstream = await command('git', ['rev-parse', 'origin/main']);
-  if (local !== upstream) throw new Error('Nhánh main local không trùng origin/main. Đồng bộ Git trước khi đăng.');
-}
 async function publish(version) {
   try {
-    job = { ...job, phase: 'publishing', message: 'Kiểm tra Git và phiên bản nháp…', deployment: null };
-    await preflight();
+    job = { ...job, phase: 'publishing', message: 'Kiểm tra bản duyệt và chuẩn bị Git cách ly…', deployment: null };
+    const assertVersion = async () => {
+      const current = await currentDraft();
+      if (!current || current.version !== version || current.errors.length) throw new Error('Nháp đã đổi hoặc chưa hợp lệ; tải lại và duyệt lại trước khi đăng.');
+    };
+    await assertVersion();
     const draft = await currentDraft();
-    if (!draft || draft.version !== version || draft.errors.length) throw new Error('Nháp đã đổi hoặc chưa hợp lệ; tải lại và duyệt lại trước khi đăng.');
-    // Only one exact, validated version crosses the private/public boundary.
-    await atomicWrite(PUBLIC, normalized(draft.catalog));
-    job.message = 'Đã sao chép bản duyệt. Đang chạy kiểm thử và build…';
-    await command('npm', ['test']);
-    await command('npm', ['run', 'build']);
-    if ((await currentDraft())?.version !== version) throw new Error('Nháp đã đổi trong lúc kiểm thử; không push.');
-    await preflight();
-    if ((await currentDraft())?.version !== version) throw new Error('Nháp đã đổi trước khi commit; không push.');
-    await command('git', ['add', '--', 'public/content/catalog.json']);
-    const staged = await command('git', ['diff', '--cached', '--name-only']);
-    if (staged !== 'public/content/catalog.json') throw new Error('File staged không như dự kiến; không commit.');
-    await command('git', ['commit', '-m', 'content: publish human-reviewed catalog', '--', 'public/content/catalog.json']);
-    const commit = await command('git', ['rev-parse', 'HEAD']);
-    job = { ...job, phase: 'deploying', message: 'Đã commit file duyệt. Đang push và chờ GitHub Actions…', commit };
-    await command('git', ['push', 'origin', 'main']);
-    let run;
-    for (let i = 0; i < 24; i++) {
-      const list = JSON.parse(await command('gh', ['run', 'list', '--workflow', 'deploy.yml', '--commit', commit, '--json', 'databaseId,status,conclusion,url', '--limit', '2']));
-      run = list[0];
-      if (run?.status === 'completed') break;
-      await new Promise(done => setTimeout(done, 5000));
-    }
-    if (!run || run.status !== 'completed') throw new Error('Chưa xác nhận được GitHub Actions hoàn tất. Mở Actions kiểm tra lại.');
-    if (run.conclusion !== 'success') throw new Error(`GitHub Actions không thành công. Xem ${run.url}`);
+    const { commit, unchanged } = await publishCatalog(ROOT, draft.catalog, {
+      assertVersion,
+      onProgress: message => { job = { ...job, message }; }
+    });
+    job = { ...job, phase: 'deploying', message: 'Đã gửi bản duyệt. Đang xác nhận GitHub Actions…', commit };
+    await confirmDeployment(commit, { command, retry: unchanged });
     const publicUrl = 'https://dzerok2020.github.io/on-tap/content/catalog.json';
     const response = await fetch(`${publicUrl}?v=${commit}`, { signal: AbortSignal.timeout(15000), cache: 'no-store' });
     if (!response.ok || hash(normalized(await response.json())) !== hash(normalized(draft.catalog))) throw new Error('Actions thành công nhưng site chưa khớp bản duyệt; kiểm tra lại trước khi chia sẻ.');
@@ -180,7 +154,7 @@ export function startAdmin({ port = Number(process.env.ADMIN_PORT || 4174) } = {
       }
       if (req.method === 'GET' && url.pathname === '/api/state') {
         const draft = await currentDraft();
-        return json(res, 200, { job, draft: draft && { catalog: draft.catalog, version: draft.version, errors: draft.errors } });
+        return json(res, 200, { job, draft: draft && { catalog: draft.catalog, version: draft.version, errors: draft.errors, summary: draft.summary } });
       }
       if (req.method !== 'POST' || !['/api/generate', '/api/draft', '/api/publish'].includes(url.pathname)) return fail(res, 404, 'Không tìm thấy.');
       if (!origin || new URL(origin).protocol !== 'http:' || !allowedHosts.has(new URL(origin).host) || req.headers['x-local-token'] !== token) return fail(res, 403, 'Yêu cầu không được xác thực từ trang local.');
