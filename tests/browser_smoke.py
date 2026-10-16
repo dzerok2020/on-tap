@@ -71,6 +71,8 @@ with sync_playwright() as p:
         if label == 'mobile':
             page.get_by_role('button', name='Mở menu').click()
         page.get_by_role('button', name='Thi thử', exact=True).click()
+        assert page.get_by_role('region', name='Danh sách đề thi').is_visible()
+        page.get_by_role('button', name='Bắt đầu đề 1', exact=True).click()
         assert page.get_by_role('timer').inner_text().strip() == '01:30:00'
         assert page.get_by_text('Câu hỏi math số 1: nên kiểm tra gì?').is_visible()
         assert not page.get_by_text('Giải thích lựa chọn A theo bối cảnh.').is_visible()
