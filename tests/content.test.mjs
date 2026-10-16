@@ -10,6 +10,24 @@ import { tmpdir } from 'node:os';
 import { content, fixture } from './fixtures.mjs';
 
 test('valid typed 60 question 100 point 90 minute exam passes', () => assert.deepEqual(validate(fixture()), []));
+test('short numeric and code MCQ options are valid but blank options and incomplete explanations reject', () => {
+  const data = fixture();
+  const q = data.exams[0].questions.find(q => q.module === 'engineering' && q.type === 'mcq');
+  q.options = { A: '(4, 3)', B: '(4, 1)', C: '(3, 4)', D: 'Lỗi' };
+  assert.deepEqual(validate(data), []);
+  for (const value of ['', '   ', null, 7]) {
+    q.options.A = value;
+    assert.match(validate(data).join(' '), /Phương án hoặc lời giải/);
+  }
+  q.options.A = '0';
+  assert.deepEqual(validate(data), []);
+  delete q.options.D;
+  assert.match(validate(data).join(' '), /Phương án hoặc lời giải/);
+  q.options.D = '1';
+  q.explanations.D = 'Sai';
+  assert.match(validate(data).join(' '), /Phương án hoặc lời giải/);
+});
+
 test('reserved object property IDs cannot reach the browser answer map', () => {
   for (const id of ['constructor', '__proto__', 'toString']) {
     const data = fixture(); data.exams[0].questions[0].id = id;

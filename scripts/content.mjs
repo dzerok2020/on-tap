@@ -154,7 +154,7 @@ export function validate(catalog) {
       else if (!Number.isFinite(q.points) || Math.abs(q.points - expected) > 1e-9) errors.push(`Điểm câu ${q.id} phải là ${expected} (module ${letter}, ${q.type})`);
       else points += q.points;
       if (q.type === 'mcq') {
-        if (!record(q.options) || letters.some(key => !own(q.options, key) || !present(q.options[key])) || !letters.includes(q.correct) || !record(q.explanations) || letters.some(key => !own(q.explanations, key) || !present(q.explanations[key]))) errors.push(`Phương án hoặc lời giải A–D không đầy đủ: ${q.id}`);
+        if (!record(q.options) || letters.some(key => !own(q.options, key) || typeof q.options[key] !== 'string' || !q.options[key].trim()) || !letters.includes(q.correct) || !record(q.explanations) || letters.some(key => !own(q.explanations, key) || !present(q.explanations[key]))) errors.push(`Phương án hoặc lời giải A–D không đầy đủ: ${q.id}`);
       } else {
         if (!present(q.modelAnswer) || q.modelAnswer.trim().length < 40) errors.push(`Đáp án mẫu quá ngắn: ${q.id}`);
         if (!Array.isArray(q.rubric) || q.rubric.length < 3 || !Array.from(q.rubric).every(item => presentShort(item))) errors.push(`Rubric cần ít nhất 3 tiêu chí rõ ràng: ${q.id}`);
