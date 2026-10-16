@@ -3,6 +3,7 @@ import { promisify } from 'node:util';
 import { mkdtemp, mkdir, readFile, writeFile, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { appendCatalog } from './content.mjs';
 const exec = promisify(execFile);
 const REMOTE = /^(https:\/\/github\.com\/dzerok2020\/on-tap(?:\.git)?|git@github\.com:dzerok2020\/on-tap(?:\.git)?)$/;
 
@@ -24,10 +25,12 @@ export async function publishCatalog(root, catalog, { onProgress = () => {}, ass
   try {
     await git('worktree', 'add', '--detach', worktree, base);
     added = true;
-    const text = JSON.stringify(catalog, null, 2) + '\n';
     const target = join(worktree, 'public/content/catalog.json');
-    let unchanged = false;
-    try { unchanged = await readFile(target, 'utf8') === text; } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    let previous = null;
+    try { previous = JSON.parse(await readFile(target, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    const published = appendCatalog(previous, catalog);
+    const text = JSON.stringify(published, null, 2) + '\n';
+    const unchanged = published === previous;
     await mkdir(join(worktree, 'public/content'), { recursive: true });
     await writeFile(target, text);
     onProgress('Đang kiểm thử và build bản duyệt trong thư mục Git cách ly…');
@@ -49,7 +52,7 @@ export async function publishCatalog(root, catalog, { onProgress = () => {}, ass
     await assertVersion();
     onProgress('Đang push riêng nội dung đã duyệt; không đưa thay đổi local khác lên GitHub…');
     if (!unchanged) await run(worktree, 'git', ['push', 'origin', 'HEAD:refs/heads/main']);
-    return { commit, unchanged };
+    return { commit, unchanged, catalog: published };
   } finally {
     // Remove only the exact disposable worktree we created, never the user's checkout.
     if (added && resolve(await realpath(worktree)) === resolve(worktree) && worktree.startsWith(holder + '/')) {

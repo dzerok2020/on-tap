@@ -1,10 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { access, mkdtemp, mkdir, writeFile, readFile } from 'node:fs/promises';
+import { access, mkdtemp, mkdir, writeFile, readFile, copyFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { publishCatalog } from '../scripts/publish.mjs';
+import { fixture } from './fixtures.mjs';
+const draft = marker => { const value = fixture(); value.exams[0].title = `Đề ôn tập đã duyệt ${marker}`; return value; };
 const run = (cwd, name, args) => execFileSync(name, args, { cwd, encoding: 'utf8', stdio: ['ignore','pipe','pipe'] }).trim();
 async function repository(scripts = {}) {
   const root = await mkdtemp(join(tmpdir(), 'on-tap-git-test-'));
@@ -34,21 +36,28 @@ test('publish isolates dirty staged/unstaged/untracked files; repeated updates a
   const indexBefore = run(repo,'git',['diff','--cached']);
   const headBefore = run(repo,'git',['rev-parse','HEAD']);
   const options = {allowedRemote:/remote\.git$/};
-  const first = await publishCatalog(repo,{version:2,marker:'reviewed-one'},options);
-  assert.equal(run(repo,'git',['show',`${first.commit}:public/content/catalog.json`]),JSON.stringify({version:2,marker:'reviewed-one'},null,2));
+  const first = await publishCatalog(repo,draft('reviewed-one'),options);
+  assert.deepEqual(JSON.parse(run(repo,'git',['show',`${first.commit}:public/content/catalog.json`])),first.catalog);
+  assert.equal(first.catalog.lessons.length,4);
+  assert.equal(first.catalog.exams.length,1);
   assert.equal(run(repo,'git',['diff-tree','--no-commit-id','--name-only','-r',first.commit]),'public/content/catalog.json');
   assert.equal(run(repo,'git',['status','--porcelain=v1','-uall']),statusBefore);
   assert.equal(run(repo,'git',['diff','--cached']),indexBefore);
   assert.equal(run(repo,'git',['rev-parse','HEAD']),headBefore);
   assert.equal(await readFile(join(repo,'notes.txt'),'utf8'),'unstaged work');
-  const second = await publishCatalog(repo,{version:2,marker:'reviewed-two'},options);
+  const second = await publishCatalog(repo,draft('reviewed-two'),options);
   assert.notEqual(first.commit,second.commit);
+  assert.equal(second.catalog.lessons.length,8);
+  assert.equal(second.catalog.exams.length,2);
+  assert.deepEqual(second.catalog.lessons.slice(0,4),first.catalog.lessons);
+  assert.deepEqual(second.catalog.exams[0],first.catalog.exams[0]);
+  assert.deepEqual(JSON.parse(run(remote,'git',['show','main:public/content/catalog.json'])),second.catalog);
   assert.equal(run(remote,'git',['rev-parse','main']),second.commit);
-  const retry = await publishCatalog(repo,{version:2,marker:'reviewed-two'},options);
+  const retry = await publishCatalog(repo,draft('reviewed-two'),options);
   assert.equal(retry.commit,second.commit);
   assert.equal(retry.unchanged,true);
   const prior = run(remote,'git',['rev-parse','main']);
-  await assert.rejects(publishCatalog(repo,{marker:'changed'}, {...options,assertVersion:async()=>{throw new Error('stale approval');}}),/stale approval/);
+  await assert.rejects(publishCatalog(repo,draft('changed'), {...options,assertVersion:async()=>{throw new Error('stale approval');}}),/stale approval/);
   assert.equal(run(remote,'git',['rev-parse','main']),prior);
   assert.equal(run(repo,'git',['worktree','list','--porcelain']).match(/^worktree /gm).length,1);
 });
@@ -58,7 +67,7 @@ test('publish refuses to overwrite a remote that advances during verification', 
   const headBefore = run(repo,'git',['rev-parse','HEAD']);
   let concurrentCommit;
   let publishWorktree;
-  await assert.rejects(publishCatalog(repo,{version:2,marker:'reviewed'}, {
+  await assert.rejects(publishCatalog(repo,draft('reviewed'), {
     allowedRemote:/remote\.git$/,
     onProgress(message) {
       if (!message.includes('kiểm thử')) return;
@@ -99,7 +108,7 @@ for (const stage of ['test','build']) {
     const progress = [];
     let publishWorktree;
     let approvalChecks = 0;
-    await assert.rejects(publishCatalog(repo,{version:2,marker:'must not publish'}, {
+    await assert.rejects(publishCatalog(repo,draft('must not publish'), {
       allowedRemote:/remote\.git$/,
       onProgress(message) {
         progress.push(message);
@@ -123,3 +132,20 @@ for (const stage of ['test','build']) {
     await assert.rejects(access(publishWorktree),{code:'ENOENT'});
   });
 }
+
+
+test('CLI appends against remote after Studio while ignoring stale unreviewed local catalog', async () => {
+  const {repo} = await repository();
+  const first = await publishCatalog(repo,draft('studio'),{allowedRemote:/remote\.git$/});
+  await mkdir(join(repo,'scripts'));
+  await copyFile(new URL('../scripts/content.mjs',import.meta.url),join(repo,'scripts/content.mjs'));
+  await mkdir(join(repo,'content/reviewed'),{recursive:true});
+  await mkdir(join(repo,'public/content'),{recursive:true});
+  await writeFile(join(repo,'public/content/catalog.json'),JSON.stringify({lessons:[],exams:[]}));
+  await writeFile(join(repo,'content/reviewed/catalog.json'),JSON.stringify(draft('cli')));
+  run(repo,process.execPath,['scripts/content.mjs','publish','--approve-reviewed']);
+  const result=JSON.parse(await readFile(join(repo,'public/content/catalog.json'),'utf8'));
+  assert.equal(result.lessons.length,8);
+  assert.equal(result.exams.length,2);
+  assert.deepEqual(result.exams[0],first.catalog.exams[0]);
+});

@@ -23,6 +23,7 @@ Một người tự học bằng tiếng Việt chuẩn bị cho bài đánh gi�
 
 ## Tiêu chí chấp nhận
 
+- Mỗi lần đăng bổ sung bộ bài học bốn module và đề đã duyệt; giữ nguyên các bộ cũ, cho chọn đề làm lại. Đăng lại chính xác cùng bản không tạo bản trùng.
 - Mỗi đề 60 câu/100 điểm/90 phút theo phân bổ 10/22/20/8, >=70% câu tình huống; bốn phương án và giải thích đúng + ba sai; validator chặn dữ liệu sai.
 - Không tiết lộ đáp án trong giao diện trước khi nộp; sau nộp hiển thị điểm và giải thích. Đáp án trong bundle công khai có thể xem qua devtools: chỉ dùng tự học.
 - API key không xuất hiện trong Git, bundle hay request của trình duyệt.

@@ -11,7 +11,8 @@
 
 `Web local → OmniRoute theo từng module → content/drafts (private local) → validate + human review + phiên bản nháp → xác nhận publish → public/content/catalog.json → commit/push chỉ file này → GitHub Actions → GitHub Pages`. CLI cũ vẫn là đường thủ công, cùng schema/validator; không có đường tự động bỏ qua duyệt.
 
-- `scripts/content.mjs`: generate CLI, validate, publish CLI, schema kiểm định và source URLs.
+- `scripts/content.mjs`: generate CLI, validate, publish CLI, schema kiểm định và source URLs. `appendCatalog` là nơi ghép dùng chung: giữ nguyên dữ liệu cũ, namespace ID mới bằng SHA-256 của bản duyệt, lưu receipt để retry không nhân đôi. Catalog cũ sai schema bị chặn, không tự ghi đè.
+- Studio lấy catalog từ `origin/main` trong checkout cách ly, ghép bản duyệt mới, rồi đối chiếu toàn bộ catalog tích lũy trên Pages. CLI cũng fetch `origin/main` để ghép, bỏ qua catalog local cũ/chưa duyệt; vẫn cần tự kiểm tra diff/push.
 - `scripts/admin.mjs`: server local một người dùng, tài nguyên quản trị riêng khỏi `public/` và Vite build; phát tiến độ qua polling, ghi nháp nguyên tử, chặn request khác origin/Host, chỉ gọi model ở server. Git chỉ commit file catalog sau khi xác nhận hash phiên bản, Git worktree tạm cách ly và theo dõi deploy.
 - `scripts/publish.mjs`: tự fetch origin/main, checkout cách ly, kiểm thử, commit/push riêng catalog; không đụng index/worktree của người dùng, xử lý retry bằng nội dung giống hệt và chặn cập nhật đồng thời.
 - `src/`: trang học, thi thử và kết quả; browser chỉ đọc nội dung đã publish, không gọi model.

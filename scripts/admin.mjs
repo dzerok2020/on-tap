@@ -111,7 +111,7 @@ async function publish(version) {
     };
     await assertVersion();
     const draft = await currentDraft();
-    const { commit, unchanged } = await publishCatalog(ROOT, draft.catalog, {
+    const { commit, unchanged, catalog: published } = await publishCatalog(ROOT, draft.catalog, {
       assertVersion,
       onProgress: message => { job = { ...job, message }; }
     });
@@ -119,7 +119,7 @@ async function publish(version) {
     await confirmDeployment(commit, { command, retry: unchanged });
     const publicUrl = 'https://dzerok2020.github.io/on-tap/content/catalog.json';
     const response = await fetch(`${publicUrl}?v=${commit}`, { signal: AbortSignal.timeout(15000), cache: 'no-store' });
-    if (!response.ok || hash(normalized(await response.json())) !== hash(normalized(draft.catalog))) throw new Error('Actions thành công nhưng site chưa khớp bản duyệt; kiểm tra lại trước khi chia sẻ.');
+    if (!response.ok || hash(normalized(await response.json())) !== hash(normalized(published))) throw new Error('Actions thành công nhưng site chưa khớp bản duyệt; kiểm tra lại trước khi chia sẻ.');
     job = { ...job, phase: 'deployed', message: 'Đã xác nhận bản được duyệt hiển thị trên GitHub Pages.', deployment: 'https://dzerok2020.github.io/on-tap/', commit };
   } catch (error) {
     job = { ...job, phase: 'publish-failed', message: safeError(error), deployment: null };

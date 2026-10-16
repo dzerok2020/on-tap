@@ -127,7 +127,33 @@ with sync_playwright() as p:
         page.get_by_role('button', name='Câu 31', exact=True).click()
         assert page.get_by_role('textbox').input_value() == ''
         assert page.get_by_text('Tiêu chí tự chấm', exact=True).count() == 0
+        library = catalog()
+        extra = catalog()
+        for lesson in extra['lessons']:
+            lesson['id'] = 'new-' + lesson['id']
+            lesson['title'] = 'Bài học mới ' + lesson['module']
+        extra['exams'][0]['id'] = 'exam-2'
+        extra['exams'][0]['title'] = 'Đề mới tích lũy'
+        extra['exams'][0]['questions'][0]['prompt'] = 'Câu đầu tiên của bộ mới tích lũy?'
+        for q in extra['exams'][0]['questions']:
+            q['id'] = 'new-' + q['id']
+        library['lessons'] += extra['lessons']
+        library['exams'] += extra['exams']
+        page.route('**/content/catalog.json', lambda route: route.fulfill(status=200, json=library))
+        page.reload(wait_until='networkidle')
+        assert page.get_by_text('8 bài học · 2 đề thi đã được duyệt').count() == 1
+        page.get_by_role('button', name='Đề 2: Đề mới tích lũy').click()
+        assert page.get_by_text('Câu đầu tiên của bộ mới tích lũy?').is_visible()
+        page.get_by_role('button', name='Về trang chủ').click()
+        page.get_by_role('button', name='Đề 1: Đề mô phỏng kiểm thử').click()
+        assert page.get_by_text('Câu hỏi math số 1: nên kiểm tra gì?').is_visible()
+        page.get_by_role('button', name='Về trang chủ').click()
+        page.get_by_role('button', name='Khám phá bài học').click()
+        assert page.get_by_text('Bài học math ứng dụng', exact=True).is_visible()
+        assert page.get_by_text('Bài học mới math', exact=True).is_visible()
+        assert page.locator('html').evaluate('(el) => el.scrollWidth <= window.innerWidth')
+        page.screenshot(path=f'/tmp/on-tap-library-{label}.png', full_page=True)
         assert not errors, f'{label} browser errors: {errors}'
-        print(f'{label}: empty-state, lessons, timer, answer hiding, submit/review passed')
+        print(f'{label}: empty-state, lessons, timer, answer hiding, submit/review and cumulative library passed')
         page.close()
     browser.close()

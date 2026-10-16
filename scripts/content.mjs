@@ -1,4 +1,7 @@
-import { mkdir, readFile, writeFile, copyFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -41,6 +44,29 @@ const own = (value, key) => record(value) && Object.hasOwn(value, key);
 const present = value => typeof value === 'string' && value.trim().length >= 12;
 const presentShort = value => typeof value === 'string' && value.trim().length >= 8;
 const validId = value => typeof value === 'string' && Boolean(value.trim()) && !(value in Object.prototype);
+
+// Namespace incoming IDs because models commonly reuse lesson/question IDs.
+// A deterministic receipt makes retrying the exact reviewed draft idempotent.
+export function appendCatalog(existing, incoming) {
+  const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
+  const signature = value => createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
+  if (validate(incoming).length) throw new Error('Bản duyệt không hợp lệ; không ghép.');
+  if (existing && validate(existing).length) throw new Error('Catalog đã đăng không hợp lệ; không thay thế nội dung cũ.');
+  if (existing?.publishedDrafts !== undefined && (!Array.isArray(existing.publishedDrafts) || !existing.publishedDrafts.every(item => typeof item === 'string' && /^[a-f0-9]{64}$/.test(item)))) throw new Error('Lịch sử xuất bản không hợp lệ; không ghép.');
+  const receipt = signature(incoming);
+  if (existing && (signature(existing) === receipt || existing.publishedDrafts?.includes(receipt))) return existing;
+  const batch = structuredClone(incoming);
+  for (const lesson of batch.lessons) lesson.id = `${receipt}-${lesson.id}`;
+  for (const exam of batch.exams) {
+    exam.id = `${receipt}-${exam.id}`;
+    for (const question of exam.questions) question.id = `${receipt}-${question.id}`;
+  }
+  const priorReceipts = existing ? Array.isArray(existing.publishedDrafts) ? existing.publishedDrafts : [signature(existing)] : [];
+  const merged = { ...(existing || incoming), lessons: [...(existing?.lessons || []), ...batch.lessons], exams: [...(existing?.exams || []), ...batch.exams], publishedDrafts: [...priorReceipts, receipt] };
+  const errors = validate(merged);
+  if (errors.length) throw new Error(`Catalog ghép không hợp lệ: ${errors.join('; ')}`);
+  return merged;
+}
 
 export function expectedPoints(module, type) {
   const spec = MODULES.includes(module) ? EXAM_STRUCTURE.modules[module] : undefined;
@@ -243,7 +269,16 @@ async function main() {
   if (errors.length) throw new Error(`Chưa hợp lệ:\n${errors.join('\n')}`);
   if (command === 'publish') {
     await mkdir(resolve(ROOT, 'public/content'), { recursive: true });
-    await copyFile(REVIEWED, PUBLISHED);
+    const exec = promisify(execFile);
+    await exec('git', ['fetch', 'origin', 'main'], { cwd: ROOT });
+    const { stdout: tracked } = await exec('git', ['ls-tree', '--name-only', 'origin/main', '--', 'public/content/catalog.json'], { cwd: ROOT });
+    let existing = null;
+    if (tracked.trim()) {
+      const { stdout } = await exec('git', ['show', 'origin/main:public/content/catalog.json'], { cwd: ROOT, maxBuffer: 16 * 1024 * 1024 });
+      existing = JSON.parse(stdout);
+    }
+    const published = appendCatalog(existing, catalog);
+    await writeFile(PUBLISHED, JSON.stringify(published, null, 2) + '\n');
     console.log('Đã xuất bản bản được duyệt vào public/content/catalog.json; hãy kiểm tra diff trước khi push.');
   } else console.log('Nội dung hợp lệ về cấu trúc; chưa bảo đảm đúng chuyên môn, cần người duyệt.');
 }

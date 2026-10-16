@@ -30,7 +30,7 @@ Nếu bạn đã lưu key trong `.env.local` ở thư mục dự án (file này 
 1. Đọc toàn bộ bài học, 60 câu, đáp án, lời giải của cả A–D và kiểm tra tính đúng với nguồn. Validator chỉ bắt lỗi **cấu trúc**, không chứng minh đúng chuyên môn; URL nguồn chỉ là liên kết tham khảo, không phải trích dẫn xác thực từng mệnh đề.
 2. Sau khi duyệt và sửa nếu cần, sao chép bản hoàn chỉnh vào `content/reviewed/catalog.json` (cũng được Git bỏ qua).
 3. Kiểm tra lần cuối: `npm run validate -- content/reviewed/catalog.json`.
-4. Chỉ khi thật sự chấp thuận xuất bản, chạy `npm run publish -- --approve-reviewed`. Lệnh này chép bản đã duyệt vào `public/content/catalog.json`, là file **công khai** khi bạn commit/push.
+4. Chỉ khi thật sự chấp thuận xuất bản, chạy `npm run publish -- --approve-reviewed`. Lệnh này fetch `origin/main` và ghép bản đã duyệt với catalog đã đăng trên remote (không dùng catalog local có thể cũ/chưa duyệt), rồi ghi kết quả vào `public/content/catalog.json`; file chỉ **công khai** khi bạn commit/push.
 5. Xem diff của file công khai, chạy `npm test && npm run build`, rồi mới commit/push. Không publish hoặc push bản chưa được con người duyệt.
 
 Lệnh `generate` gọi tuần tự bốn module và không tự sửa nội dung AI sai định dạng; nếu model trả về JSON thiếu/truncated, cần chạy lại hoặc sửa nháp sau khi kiểm tra. Không đưa khóa vào GitHub Actions: CI chỉ build nội dung đã duyệt.
